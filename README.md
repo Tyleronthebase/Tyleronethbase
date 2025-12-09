@@ -14,7 +14,7 @@
 
 ### 👨‍💻 About Me
 
-<div align="center">
+<img align="right" alt="Coding GIF" width="400" src="https://media.tenor.com/4oBb38tP7sgAAAAi/metro-man-metro-man-arm-swing.gif">
 
 ```typescript
 const tyler = {
@@ -37,7 +37,7 @@ const tyler = {
 };
 ```
 
-</div>
+<br clear="right"/>
 
 ---
 
