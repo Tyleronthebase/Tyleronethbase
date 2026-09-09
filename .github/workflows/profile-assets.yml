@@ -1,0 +1,79 @@
+name: Refresh profile assets
+
+on:
+  schedule:
+    - cron: '23 2 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/update-stats.mjs
+      - .github/workflows/profile-assets.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: profile-assets
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.repository == 'Tyleronthebase/Tyleronthebase' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # Official repository tag SHAs verified through GitHub REST on 2026-09-09.
+      - name: Check out main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+
+      - name: Generate public repository statistics
+        run: node scripts/update-stats.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate contribution animation
+        uses: Platane/snk/svg-only@d8f6715049803e982ee5ff501b6b9b7d5deeb09b # v3
+        with:
+          github_user_name: Tyleronthebase
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          outputs: |
+            assets/contributions-light.svg?color_snake=#365BD7&color_dots=#E3EAF3,#BDE1DA,#8ECABD,#53AD9B,#168577
+            assets/contributions-dark.svg?palette=github-dark&color_snake=#A8BAFF&color_dots=#1C2C44,#244E50,#327E77,#4BAB9D,#74D5C5
+
+      - name: Respect reduced motion
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const style = '<style>@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }</style>';
+          for (const name of ['light', 'dark']) {
+            const path = `assets/contributions-${name}.svg`;
+            const svg = await readFile(path, 'utf8');
+            if (!/<svg\b[^>]*>/.test(svg) || !svg.includes('</svg>')) throw new Error(`Invalid contribution SVG: ${name}`);
+            await writeFile(path, svg.replace(/(<svg\b[^>]*>)/, `$1${style}`));
+          }
+          NODE
+
+      - name: Commit refreshed assets
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/stats-light.svg assets/stats-dark.svg assets/stats-mobile-light.svg assets/stats-mobile-dark.svg assets/contributions-light.svg assets/contributions-dark.svg
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'Refresh public profile assets'
+          git pull --rebase origin main
+          git push origin HEAD:main
